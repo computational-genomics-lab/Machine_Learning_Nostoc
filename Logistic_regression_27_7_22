@@ -1,0 +1,77 @@
+#Logistic regression
+
+import fastai 
+import kornia
+from fastai.tabular import * 
+import pandas as pd
+import os
+from os.path import join, isfile
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_predict, cross_val_score, KFold
+from sklearn.metrics import roc_auc_score, roc_curve, plot_roc_curve, accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import f1_score, jaccard_score, matthews_corrcoef
+from sklearn.model_selection import train_test_split
+import keras
+from torch.utils.data import DataLoader
+from random import shuffle
+import tensorflow as tf
+import random as rn
+from tensorflow.keras.utils import to_categorical
+
+
+path = '//home/dell/Desktop/Python_codes/ML/thesis//'
+df = pd.read_csv(join(path,'nostoc_dataset_text.csv'))
+df_list = df['DATASET'].tolist()
+df_labels = df['LABEL'].tolist()
+seqs=[list(c) for c in df_list]
+df222=pd.DataFrame(seqs,columns=[str(i) for i in range(1,51)])
+df222['LABEL']=df_labels
+print(df222)
+#print(df_labels)
+#sequences=[list(c) for c in df_list]
+columns= [str(i) for i in range(1, 51)] #numericalisation
+for i in range(1,51):
+    df222[str(i)] = df222[str(i)].astype('category')
+df222[columns] = df222[columns].apply(lambda x: x.cat.codes) #one-hot-encoding the nucleotide bases ***
+df222["LABEL"] = df222["LABEL"].astype('category')
+df222["LABEL"] = df222["LABEL"].cat.codes #converting positive and negative into binary values of 0 and 1
+
+# columns.append("LABEL")
+X=df222[columns] .values #feature matrix
+y=df222['LABEL'].values #target array where target is the label
+print(X)
+print(y)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+print("X_train.shape, X_test.shape")
+print(X_train.shape, X_test.shape)
+print("y_train.shape, y_test.shape")
+print(y_train.shape, y_test.shape)
+
+est=LogisticRegression(solver='saga')
+folds = 5 
+kf = KFold(n_splits=folds, shuffle=True)
+scores = np.zeros((len(y),2))
+aucs=[]
+for fold, (train,test) in enumerate(kf.split(X)): 
+    clf=est.fit(X[train,:],y[train]) 
+    if hasattr(est, "predict_proba"): 
+        prob_pos = est.predict_proba(X[test,:])
+    else:  
+        prob_pos = est.decision_function(X[test,:])
+    scores[test,:]=prob_pos
+    aucs.append(roc_auc_score(y[test]==1, scores[test,0]))
+auc = roc_auc_score(y==0, scores[:,0]) 
+(fpr, tpr, treshs) = roc_curve(y==0, scores[:,0]) 
+print('Logistic Regression has overall auc %f' %(auc)) 
+y_true=y[train]
+y_pred=est.predict(X[train,:])
+confusion_matrix(y_true, y_pred)
+print('AUC=%s' %(roc_auc_score(y, clf.decision_function(X))))
+print('accuracy=%s' %(accuracy_score(y_true, y_pred)))
+print('f1-score=%s' %(f1_score(y_true, y_pred, average='micro')))
+print('Jaccard score=%s' %(jaccard_score(y_true, y_pred, average='micro')))
+print('Mathews Correlation Coefficient=%s' %(matthews_corrcoef(y_true, y_pred)))
+target_names = ['class 0 - Normal', 'class 1-PD']
+print(classification_report(y_true, y_pred, target_names=target_names))

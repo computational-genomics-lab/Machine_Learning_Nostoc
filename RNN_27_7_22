@@ -1,0 +1,124 @@
+#RNN Model
+
+import fastai 
+import kornia
+from fastai.tabular import * 
+import pandas as pd
+import os
+from os.path import join, isfile
+import numpy as np
+from sklearn.metrics import roc_auc_score, roc_curve, plot_roc_curve, accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import f1_score, jaccard_score, matthews_corrcoef
+from sklearn.model_selection import train_test_split
+import keras
+from keras import datasets, layers, models
+from fastai.tabular.all import *
+from keras.models import Sequential
+from keras.layers import LSTM
+from keras.layers.core import Dense, Activation, Dropout
+import time
+import tensorflow as tf
+import random as rn
+from tensorflow.keras.utils import to_categorical
+from keras.models import Sequential
+from keras.layers.core import Dense, Activation, Dropout 
+
+path = '//home/dell/Desktop/Python_codes/ML/thesis//'
+df = pd.read_csv(join(path,'nostoc_dataset_text.csv'))
+df_list = df['DATASET'].tolist()
+df_labels = df['LABEL'].tolist()
+seqs=[list(c) for c in df_list]
+df222=pd.DataFrame(seqs,columns=[str(i) for i in range(1,51)])
+df222['LABEL']=df_labels
+print(df222)
+#print(df_labels)
+#sequences=[list(c) for c in df_list]
+columns= [str(i) for i in range(1, 51)] #numericalisation
+for i in range(1,51):
+    df222[str(i)] = df222[str(i)].astype('category')
+df222[columns] = df222[columns].apply(lambda x: x.cat.codes) #one-hot-encoding the nucleotide bases (MY FAULT)
+df222["LABEL"] = df222["LABEL"].astype('category')
+df222["LABEL"] = df222["LABEL"].cat.codes #converting positive and negative into binary values of 0 and 1
+
+# columns.append("LABEL")
+X=df222[columns] .values #feature matrix
+y=df222['LABEL'].values #target array where target is the label
+print(X)
+print(y)
+X.shape
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+# reshape data to have a single channel
+print("X_train.shape, X_test.shape")
+print(X_train.shape, X_test.shape)
+X_train1=X_train
+X_train = X_train.reshape((X_train.shape[0], X_train.shape[1],1))
+X_test1=X_test
+X_test = X_test.reshape((X_test.shape[0], X_test.shape[1],1))
+print(y_test)
+in_shape = X_train.shape[1:]
+y_train1=y_train
+y_train = to_categorical(y_train)
+y_test1=y_test
+y_test = to_categorical(y_test)
+print(y_train.astype, y_train1.astype)
+
+modelRNN = Sequential()
+modelRNN.add(LSTM(64, activation='tanh', recurrent_activation='hard_sigmoid',\
+                    use_bias=True, kernel_initializer='glorot_uniform',\
+                    recurrent_initializer='orthogonal',\
+                    unit_forget_bias=True, kernel_regularizer=None,\
+                    recurrent_regularizer=None,\
+                    bias_regularizer=None, activity_regularizer=None,\
+                    kernel_constraint=None, recurrent_constraint=None,\
+                    bias_constraint=None, dropout=0.0, recurrent_dropout=0.0,\
+                    implementation=1, return_sequences=True, return_state=False,\
+                    go_backwards=False, stateful=False, unroll=False,\
+                    input_shape=(50, 1)))
+modelRNN.add(Dropout(0.5))
+
+modelRNN.add(LSTM(128, activation='tanh', recurrent_activation='hard_sigmoid',\
+                    use_bias=True, kernel_initializer='glorot_uniform',\
+                    recurrent_initializer='orthogonal',\
+                    unit_forget_bias=True, kernel_regularizer=None,\
+                    recurrent_regularizer=None,\
+                    bias_regularizer=None, activity_regularizer=None,\
+                    kernel_constraint=None, recurrent_constraint=None, \
+                    bias_constraint=None, dropout=0.0, recurrent_dropout=0.0,\
+                    implementation=1, return_sequences=False, return_state=False,\
+                    go_backwards=False, stateful=False, unroll=False,
+                    input_shape=(50, 1)))
+modelRNN.add(Dropout(0.5))
+modelRNN.add(Dense(2))
+modelRNN.add(Activation('softmax'))
+modelRNN.summary()
+
+start = time.time()
+modelRNN.compile(loss="categorical_crossentropy", optimizer="rmsprop")
+print("RNN Compilation time: ", time.time(), '-', start)
+
+#RNN
+#csv_logger = CSVLogger('training.log', append=True)
+#early_stop = EarlyStopping(monitor='val_loss', min_delta=0.1, patience=10, verbose=0, mode='auto')
+history = modelRNN.fit(X_train, y_train, epochs=300) #, validation_split=0.20callbacks=[csv_logger, early_stop]) 
+pred = modelRNN.predict(X_test)
+labels = []
+for inputs in range(len(y_test1)):
+    labels.append(y_test1[inputs]) 
+y_true=labels #y_test
+predicted_labels = []
+for prediction in pred:
+    prediction_list = list(prediction)
+    predicted_labels.append(prediction_list.index(max(prediction_list)))
+y_pred=predicted_labels
+#print(y_true)
+#print(y_pred)
+confusion_matrix(y_true, y_pred)
+print('RNN')
+print('AUC=%s' %(roc_auc_score(y_test, pred)))
+print('Testing accuracy=%s' %(accuracy_score(y_true, y_pred)))
+print('f1-score=%s' %(f1_score(y_true, y_pred, average='micro')))
+print('Jaccard score=%s' %(jaccard_score(y_true, y_pred, average='micro')))
+print('Mathews Correlation Coefficient=%s' %(matthews_corrcoef(y_true, y_pred)))
+target_names = ['class 0 - Normal', 'class 1-PD']
+print(classification_report(y_true, y_pred, target_names=target_names))
